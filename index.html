@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="工事写真">
+<title>工事写真台帳カメラ</title>
+<style>
+:root {
+  --bg: #0f1117;
+  --surface: #1c1f2a;
+  --surface2: #252838;
+  --border: rgba(255,255,255,0.10);
+  --border2: rgba(255,255,255,0.18);
+  --text: #f0f2f8;
+  --text2: #8b90a8;
+  --accent: #4a7cf8;
+  --accent2: #3563d4;
+  --green: #2ec27e;
+  --red: #e05252;
+  --radius: 14px;
+  --radius-sm: 8px;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bot: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: -apple-system, 'Hiragino Sans', sans-serif; }
+
+/* ── LAYOUT ── */
+#app { display: flex; flex-direction: column; height: 100%; height: 100dvh; }
+#header { padding: calc(var(--safe-top) + 10px) 16px 10px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; display: flex; align-items: center; gap: 10px; }
+#header .logo { width: 32px; height: 32px; background: var(--accent); border-radius: 8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+#header h1 { font-size: 15px; font-weight: 600; letter-spacing: 0.02em; }
+#header p { font-size: 11px; color: var(--text2); margin-top: 1px; }
+
+/* ── TABS ── */
+#tabbar { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.tab-btn { flex: 1; padding: 12px 4px; font-size: 12px; font-weight: 500; color: var(--text2); border: none; background: none; cursor: pointer; position: relative; transition: color 0.2s; }
+.tab-btn.active { color: var(--accent); }
+.tab-btn.active::after { content:''; position:absolute; bottom:0; left:20%; right:20%; height:2px; background:var(--accent); border-radius:2px; }
+.tab-icon { font-size: 18px; display: block; margin-bottom: 2px; }
+
+/* ── PANELS ── */
+#panels { flex: 1; overflow: hidden; position: relative; }
+.panel { position: absolute; inset: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; display: none; }
+.panel.active { display: block; }
+
+/* ── SHOOT PANEL ── */
+#shoot-panel { display: flex; flex-direction: column; background: #000; }
+#viewfinder { flex: 1; position: relative; display: flex; align-items: center; justify-content: center; min-height: 200px; overflow: hidden; }
+#cam-video { width: 100%; height: 100%; object-fit: cover; display: none; }
+#main-canvas { width: 100%; height: 100%; object-fit: contain; display: none; touch-action: none; }
+#no-cam-msg { text-align: center; color: var(--text2); padding: 20px; }
+#no-cam-msg .icon { font-size: 48px; margin-bottom: 10px; }
+#sign-drag-hint { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.6); color: #fff; font-size: 11px; padding: 4px 10px; border-radius: 20px; pointer-events: none; white-space: nowrap; opacity: 0; transition: opacity 0.3s; }
+#sign-drag-hint.show { opacity: 1; }
+
+#shoot-controls { background: var(--surface); padding: 12px 16px; border-top: 1px solid var(--border); flex-shrink: 0; padding-bottom: calc(12px + var(--safe-bot)); }
+.shoot-btn-row { display: flex; gap: 8px; align-items: center; }
+.shoot-btn-row .spacer { flex: 1; }
+#shutter-btn { width: 66px; height: 66px; border-radius: 50%; background: #fff; border: 4px solid var(--text2); box-shadow: 0 0 0 2px #fff; cursor: pointer; transition: transform 0.1s; flex-shrink: 0; }
+#shutter-btn:active { transform: scale(0.92); }
+#shutter-btn.ready { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.icon-btn { width: 48px; height: 48px; border-radius: 50%; border: 1.5px solid var(--border2); background: var(--surface2); color: var(--text); font-size: 20px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+#status-bar { font-size: 11px; color: var(--text2); text-align: center; margin-top: 8px; min-height: 16px; }
+
+/* ── SIGN PANEL ── */
+#sign-panel { padding: 0 0 calc(16px + var(--safe-bot)); }
+.section { padding: 14px 16px 0; }
+.section-title { font-size: 11px; font-weight: 600; color: var(--text2); letter-spacing: 0.08em; text-transform: uppercase; margin-bottom: 8px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.field-row { display: flex; align-items: center; border-bottom: 1px solid var(--border); }
+.field-row:last-child { border-bottom: none; }
+.field-lbl { font-size: 13px; color: var(--text2); padding: 11px 12px; white-space: nowrap; min-width: 80px; flex-shrink: 0; }
+.field-lbl.editable { color: var(--accent); }
+.field-lbl input { background: none; border: none; color: var(--accent); font-size: 13px; width: 72px; padding: 0; outline: none; font-family: inherit; }
+.field-val { flex: 1; border: none; background: none; color: var(--text); font-size: 14px; padding: 11px 12px 11px 0; outline: none; font-family: inherit; min-width: 0; }
+.field-val::placeholder { color: var(--text2); opacity: 0.6; }
+input[type="date"].field-val { color-scheme: dark; }
+
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+.toggle-text { font-size: 14px; }
+.toggle-sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+.ios-toggle { position: relative; width: 50px; height: 28px; flex-shrink: 0; }
+.ios-toggle input { display: none; }
+.ios-slider { position: absolute; inset: 0; background: var(--border2); border-radius: 14px; cursor: pointer; transition: background 0.25s; }
+.ios-toggle input:checked + .ios-slider { background: var(--green); }
+.ios-slider::after { content:''; position:absolute; left:3px; top:3px; width:22px; height:22px; background:#fff; border-radius:50%; transition:transform 0.25s; box-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+.ios-toggle input:checked + .ios-slider::after { transform: translateX(22px); }
+
+.style-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.style-option { background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-sm); padding: 10px; cursor: pointer; text-align: center; transition: border-color 0.15s; }
+.style-option.selected { border-color: var(--accent); background: rgba(74,124,248,0.12); }
+.style-option .swatch { width: 100%; height: 36px; border-radius: 6px; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; }
+.style-option span { font-size: 12px; color: var(--text2); }
+
+.pos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.pos-btn { padding: 9px; background: var(--surface); border: 1.5px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; color: var(--text2); cursor: pointer; text-align: center; transition: all 0.15s; }
+.pos-btn.selected { border-color: var(--accent); color: var(--accent); background: rgba(74,124,248,0.1); }
+
+.fn-box { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; font-size: 12px; color: var(--text2); word-break: break-all; font-family: 'SF Mono', monospace; }
+.fn-box strong { color: var(--text); font-weight: 500; }
+
+.preview-canvas-wrap { background: #222; border-radius: var(--radius); overflow: hidden; }
+#sign-preview-canvas { display: block; width: 100%; }
+
+/* ── GALLERY PANEL ── */
+#gallery-panel { padding: 0 0 calc(16px + var(--safe-bot)); }
+.gallery-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; }
+.gallery-header span { font-size: 13px; color: var(--text2); }
+.gallery-actions { display: flex; gap: 6px; }
+.sm-btn { padding: 6px 12px; font-size: 12px; border-radius: var(--radius-sm); border: 1.5px solid var(--border2); background: var(--surface); color: var(--text); cursor: pointer; }
+.sm-btn.accent { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sm-btn.red { background: var(--red); border-color: var(--red); color: #fff; }
+.photo-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); }
+.photo-item { background: var(--bg); position: relative; }
+.photo-item img { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
+.photo-info { padding: 6px 8px; }
+.photo-no { font-size: 13px; font-weight: 600; color: var(--text); }
+.photo-name { font-size: 10px; color: var(--text2); margin-top: 1px; word-break: break-all; line-height: 1.3; }
+.photo-del { position: absolute; top: 6px; right: 6px; width: 26px; height: 26px; background: rgba(0,0,0,0.65); border-radius: 50%; border: none; color: #fff; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.no-photos { text-align: center; padding: 48px 20px; color: var(--text2); }
+.no-photos .icon { font-size: 48px; display: block; margin-bottom: 12px; }
+
+/* ── SLIDER ── */
+.slider-row { display: flex; align-items: center; gap: 10px; padding: 10px 0 2px; }
+.slider-row label { font-size: 12px; color: var(--text2); white-space: nowrap; }
+.slider-row input[type=range] { flex: 1; -webkit-appearance: none; height: 4px; background: var(--border2); border-radius: 2px; }
+.slider-row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; background: #fff; border-radius: 50%; box-shadow: 0 1px 4px rgba(0,0,0,0.4); }
+.slider-row .val { font-size: 12px; color: var(--text); min-width: 36px; text-align: right; }
+
+/* ── BUTTONS ── */
+.full-btn { display: block; width: 100%; padding: 13px; background: var(--accent); color: #fff; font-size: 15px; font-weight: 600; border: none; border-radius: var(--radius); cursor: pointer; text-align: center; }
+.full-btn:active { opacity: 0.85; }
+.full-btn.outline { background: none; border: 1.5px solid var(--border2); color: var(--text); }
+
+/* ── TOAST ── */
+#toast { position: fixed; bottom: calc(80px + var(--safe-bot)); left: 50%; transform: translateX(-50%) translateY(10px); background: rgba(20,20,30,0.95); color: #fff; padding: 10px 20px; border-radius: 20px; font-size: 13px; pointer-events: none; opacity: 0; transition: all 0.3s; white-space: nowrap; z-index: 999; border: 1px solid var(--border2); }
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- HEADER -->
+  <div id="header">
+    <div class="logo">
+      <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
+        <path fill="#fff" d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+        <path fill="#fff" fill-rule="evenodd" d="M9 3a1 1 0 0 0-.894.553L7.382 5H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-3.382l-.724-1.447A1 1 0 0 0 15 3H9Zm3 5a5 5 0 1 0 0 10A5 5 0 0 0 12 8Z" clip-rule="evenodd"/>
+      </svg>
+    </div>
+    <div>
+      <h1>工事写真台帳カメラ</h1>
+      <p>黒板付き施工写真アプリ</p>
+    </div>
+  </div>
+
+  <!-- TABBAR -->
+  <div id="tabbar">
+    <button class="tab-btn active" onclick="showTab('shoot')">
+      <span class="tab-icon">📷</span>撮影
+    </button>
+    <button class="tab-btn" onclick="showTab('sign')">
+      <span class="tab-icon">🪧</span>黒板設定
+    </button>
+    <button class="tab-btn" onclick="showTab('gallery')">
+      <span class="tab-icon">🗂️</span>保存写真
+    </button>
+  </div>
+
+  <!-- PANELS -->
+  <div id="panels">
+
+    <!-- ===== SHOOT PANEL ===== -->
+    <div class="panel active" id="shoot-panel">
+      <div id="viewfinder">
+        <video id="cam-video" autoplay playsinline muted></video>
+        <canvas id="main-canvas"></canvas>
+        <div id="no-cam-msg">
+          <div class="icon">📷</div>
+          <div>カメラを起動するか<br>画像を選択してください</div>
+        </div>
+        <div id="sign-drag-hint">黒板をドラッグで移動 · 右下をドラッグでリサイズ</div>
+      </div>
+
+      <div id="shoot-controls">
+        <div class="shoot-btn-row">
+          <!-- 左: ギャラリー/画像選択 -->
+          <div class="icon-btn" onclick="document.getElementById('file-input').click()" style="font-size:22px;">🖼️</div>
+          <input type="file" id="file-input" accept="image/*" style="display:none" onchange="loadImage(this)">
+          <div class="spacer"></div>
+
+          <!-- 中央: シャッター -->
+          <button id="shutter-btn" onclick="onShutter()"></button>
+
+          <div class="spacer"></div>
+
+          <!-- 右: カメラ切り替え -->
+          <div class="icon-btn" id="cam-toggle-btn" onclick="toggleCamera()" style="font-size:22px;">🔄</div>
+        </div>
+        <div id="status-bar"></div>
+      </div>
+    </div>
+
+    <!-- ===== SIGN PANEL ===== -->
+    <div class="panel" id="sign-panel">
+
+      <div class="section">
+        <div class="section-title">基本情報</div>
+        <div class="card">
+          <div class="field-row">
+            <span class="field-lbl">現場名</span>
+            <input class="field-val" id="f-site" placeholder="○○マンション" oninput="renderAll()">
+          </div>
+          <div class="field-row">
+            <span class="field-lbl">工事名</span>
+            <input class="field-val" id="f-work" placeholder="空圧テスト" oninput="renderAll()">
+          </div>
+        </div>
+      </div>
+
+      <div class="section" style="margin-top:14px;">
+        <div class="section-title">自由入力欄（ラベルをタップで変更）</div>
+        <div class="card">
+          <div class="field-row">
+            <span class="field-lbl editable"><input id="lbl1" value="工程" oninput="renderAll()" maxlength="6"></span>
+            <input class="field-val" id="f1" placeholder="例：試験前" oninput="renderAll()">
+          </div>
+          <div class="field-row">
+            <span class="field-lbl editable"><input id="lbl2" value="施工者" oninput="renderAll()" maxlength="6"></span>
+            <input class="field-val" id="f2" placeholder="例：○○建設㈱" oninput="renderAll()">
+          </div>
+          <div class="field-row" style="background: rgba(74,124,248,0.06);">
+            <span class="field-lbl editable"><input id="lbl3" value="部屋No." oninput="renderAll()" maxlength="6" style="width:76px;"></span>
+            <input class="field-val" id="f3" placeholder="501（ファイル名先頭・並べ替えに使用）" oninput="renderAll()">
+          </div>
+        </div>
+        <p style="font-size:11px;color:var(--text2);margin-top:6px;padding:0 4px;">※ 3マス目がファイル名の先頭になります</p>
+      </div>
+
+      <div class="section" style="margin-top:14px;">
+        <div class="section-title">日付</div>
+        <div class="toggle-row">
+          <div>
+            <div class="toggle-text">黒板に日付を表示</div>
+          </div>
+          <label class="ios-toggle">
+            <input type="checkbox" id="use-date" checked onchange="renderAll()">
+            <span class="ios-slider"></span>
+          </label>
+        </div>
+        <div id="date-row" class="card" style="margin-top:8px;">
+          <div class="field-row">
+            <span class="field-lbl">日付</span>
+            <input class="field-val" type="date" id="f-date" oninput="renderAll()">
+          </div>
+          <div class="field-row" style="border-bottom:none;">
+            <span class="field-lbl" style="color:var(--accent);cursor:pointer;" onclick="setToday()">今日</span>
+            <span class="field-val" style="font-size:12px;color:var(--text2);">タップで今日の日付を入力</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section" style="margin-top:14px;">
+        <div class="section-title">黒板スタイル</div>
+        <div class="style-grid" id="style-grid">
+          <div class="style-option selected" data-bg="#111111" data-tc="#ffffff" onclick="selectStyle(this)">
+            <div class="swatch" style="background:#111;color:#fff;">黒板</div>
+            <span>黒（標準）</span>
+          </div>
+          <div class="style-option" data-bg="#1a3a1a" data-tc="#ffffff" onclick="selectStyle(this)">
+            <div class="swatch" style="background:#1a3a1a;color:#9ef;"></div>
+            <span>緑（黒板）</span>
+          </div>
+          <div class="style-option" data-bg="#0d2e5c" data-tc="#ffffff" onclick="selectStyle(this)">
+            <div class="swatch" style="background:#0d2e5c;color:#fff;">青帯</div>
+            <span>青（現場）</span>
+          </div>
+          <div class="style-option" data-bg="#ffffff" data-tc="#111111" onclick="selectStyle(this)">
+            <div class="swatch" style="background:#fff;color:#111;border:1px solid #ddd;">白地</div>
+            <span>白地</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="section" style="margin-top:14px;">
+        <div class="section-title">黒板の位置</div>
+        <div class="pos-grid">
+          <div class="pos-btn selected" data-pos="bl" onclick="selectPos(this)">左下</div>
+          <div class="pos-btn" data-pos="br" onclick="selectPos(this)">右下</div>
+          <div class="pos-btn" data-pos="tl" onclick="selectPos(this)">左上</div>
+          <div class="pos-btn" data-pos="tr" onclick="selectPos(this)">右上</div>
+        </div>
+        <div class="slider-row">
+          <label>サイズ</label>
+          <input type="range" id="sign-size" min="140" max="420" value="220" oninput="onSizeChange()">
+          <span class="val" id="size-val">220</span>
+        </div>
+      </div>
+
+      <div class="section" style="margin-top:14px;">
+        <div class="section-title">プレビュー</div>
+        <div class="preview-canvas-wrap">
+          <canvas id="sign-preview-canvas"></canvas>
+        </div>
+      </div>
+
+      <div class="section" style="margin-top:14px;">
+        <div class="section-title">ファイル名プレビュー</div>
+        <div class="fn-box">→ <strong id="fn-preview">（黒板の内容が反映されます）</strong></div>
+      </div>
+
+      <div class="section" style="margin-top:16px; display:flex; gap:8px;">
+        <button class="full-btn" onclick="showTab('shoot')">撮影へ戻る</button>
+        <button class="full-btn outline" onclick="clearFields()" style="flex-shrink:0; width:auto; padding:13px 18px;">リセット</button>
+      </div>
+
+    </div>
+
+    <!-- ===== GALLERY PANEL ===== -->
+    <div class="panel" id="gallery-panel">
+      <div class="gallery-header">
+        <span>計 <strong id="photo-count">0</strong> 枚</span>
+        <div class="gallery-actions">
+          <button class="sm-btn" onclick="sortPhotos()">No.順</button>
+          <button class="sm-btn accent" id="dl-all-btn" style="display:none" onclick="downloadAll()">一括DL</button>
+          <button class="sm-btn red" id="clear-btn" style="display:none" onclick="clearAll()">全削除</button>
+        </div>
+      </div>
+      <div class="photo-grid" id="photo-grid"></div>
+      <div class="no-photos" id="no-photos">
+        <span class="icon">📂</span>
+        保存された写真はありません
+      </div>
+    </div>
+
+  </div><!-- /panels -->
+</div><!-- /app -->
+
+<div id="toast"></div>
+<canvas id="off-canvas" style="display:none;"></canvas>
+
+<script>
+// ===========================
+// STATE
+// ===========================
+let photos = [];
+let stream = null;
+let facingMode = 'environment';
+let cameraActive = false;
+let photoImage = null;
+let signOffX = 16, signOffY = -1;
+let signW = 220;
+let signBg = '#111111', signTc = '#ffffff';
+let signPos = 'bl';
+let dragging = false, resizing = false;
+let dsx, dsy, dox, doy, rsX, rsW;
+
+// ===========================
+// INIT
+// ===========================
+setToday();
+document.getElementById('use-date').addEventListener('change', () => {
+  document.getElementById('date-row').style.display = document.getElementById('use-date').checked ? '' : 'none';
+  renderAll();
+});
+renderAll();
+
+function setToday() {
+  document.getElementById('f-date').value = new Date().toISOString().slice(0, 10);
+  renderAll();
+}
+
+// ===========================
+// TAB
+// ===========================
+function showTab(id) {
+  document.querySelectorAll('.tab-btn').forEach((b, i) => b.classList.toggle('active', ['shoot','sign','gallery'][i] === id));
+  document.querySelectorAll('.panel').forEach((p, i) => p.classList.toggle('active', ['shoot-panel','sign-panel','gallery-panel'][i] === 'panel' || p.id === id + '-panel'));
+  if (id === 'sign') renderAll();
+  if (id === 'gallery') renderGallery();
+}
+
+// ===========================
+// FIELDS
+// ===========================
+function getF() {
+  return {
+    site:    document.getElementById('f-site').value.trim(),
+    work:    document.getElementById('f-work').value.trim(),
+    lbl1:    document.getElementById('lbl1').value.trim() || '欄1',
+    f1:      document.getElementById('f1').value.trim(),
+    lbl2:    document.getElementById('lbl2').value.trim() || '欄2',
+    f2:      document.getElementById('f2').value.trim(),
+    lbl3:    document.getElementById('lbl3').value.trim() || '部屋No.',
+    f3:      document.getElementById('f3').value.trim(),
+    date:    document.getElementById('f-date').value,
+    useDate: document.getElementById('use-date').checked,
+  };
+}
+
+function getFilename(f) {
+  const parts = [];
+  if (f.f3)  parts.push(f.f3);
+  if (f.work) parts.push(f.work);
+  if (f.f1)  parts.push(f.f1);
+  if (f.f2)  parts.push(f.f2);
+  if (f.useDate && f.date) parts.push(f.date.replace(/-/g, ''));
+  const base = parts.join('_') || 'photo';
+  return base.replace(/[\\/:*?"<>|]/g, '') + '.jpg';
+}
+
+function clearFields() {
+  ['f-site','f-work','f1','f2','f3'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('lbl1').value = '工程';
+  document.getElementById('lbl2').value = '施工者';
+  document.getElementById('lbl3').value = '部屋No.';
+  setToday();
+  renderAll();
+  toast('リセットしました');
+}
+
+// ===========================
+// STYLE / POS
+// ===========================
+function selectStyle(el) {
+  document.querySelectorAll('.style-option').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  signBg = el.dataset.bg;
+  signTc = el.dataset.tc;
+  renderAll();
+}
+function selectPos(el) {
+  document.querySelectorAll('.pos-btn').forEach(e => e.classList.remove('selected'));
+  el.classList.add('selected');
+  signPos = el.dataset.pos;
+  signOffY = -1;
+  applyPos();
+  if (cameraActive || photoImage) drawFrame();
+}
+function onSizeChange() {
+  signW = parseInt(document.getElementById('sign-size').value);
+  document.getElementById('size-val').textContent = signW;
+  renderAll();
+}
+
+// ===========================
+// SIGN DRAWING
+// ===========================
+function buildRows(f) {
+  const rows = [
+    ['現場名', f.site || ''],
+    ['工事名', f.work || ''],
+    [f.lbl1, f.f1],
+    [f.lbl2, f.f2],
+    [f.lbl3, f.f3],
+  ];
+  if (f.useDate) rows.push(['撮影日', f.date || '']);
+  return rows;
+}
+
+function drawSign(ctx, W, f) {
+  const bg = signBg, tc = signTc;
+  const isLight = bg === '#ffffff';
+  const lh = 24, titleH = 30;
+  const rows = buildRows(f);
+  const H = titleH + rows.length * lh + 4;
+
+  // background
+  ctx.fillStyle = bg;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(0, 0, W, H, 5);
+  else ctx.rect(0, 0, W, H);
+  ctx.fill();
+
+  // border
+  ctx.strokeStyle = isLight ? '#aaa' : 'rgba(255,255,255,0.25)';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(0.75, 0.75, W - 1.5, H - 1.5, 5);
+  else ctx.rect(0.75, 0.75, W - 1.5, H - 1.5);
+  ctx.stroke();
+
+  // header band
+  ctx.fillStyle = isLight ? '#e8e8e8' : 'rgba(0,0,0,0.4)';
+  ctx.fillRect(0, 0, W, titleH);
+  ctx.fillStyle = tc;
+  ctx.font = `bold ${Math.max(11, W * 0.048)}px -apple-system, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('工 事 写 真', W / 2, titleH / 2);
+
+  const sepX = W * 0.33;
+  const fs = Math.max(10, W * 0.042);
+  const lblC = isLight ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.5)';
+  const valC = tc;
+
+  rows.forEach((row, i) => {
+    const y = titleH + i * lh;
+    if (i % 2 === 0) {
+      ctx.fillStyle = isLight ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.04)';
+      ctx.fillRect(0, y, W, lh);
+    }
+    ctx.strokeStyle = isLight ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(sepX, y); ctx.lineTo(sepX, y + lh); ctx.stroke();
+
+    ctx.fillStyle = lblC;
+    ctx.font = `${fs * 0.88}px -apple-system, sans-serif`;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(row[0], sepX - 4, y + lh / 2);
+
+    ctx.fillStyle = valC;
+    ctx.font = `${fs}px -apple-system, sans-serif`;
+    ctx.textAlign = 'left';
+    const maxW = W - sepX - 8;
+    let text = row[1] || '';
+    while (text.length > 1 && ctx.measureText(text).width > maxW) text = text.slice(0, -1);
+    ctx.fillText(text, sepX + 6, y + lh / 2);
+  });
+
+  return H;
+}
+
+function getSignH(W, f) {
+  const rows = buildRows(f);
+  return 30 + rows.length * 24 + 4;
+}
+
+// ===========================
+// RENDER ALL
+// ===========================
+function renderAll() {
+  const f = getF();
+  // preview canvas
+  const pc = document.getElementById('sign-preview-canvas');
+  const pw = pc.parentElement.clientWidth || 300;
+  pc.width = pw; pc.height = getSignH(pw, f);
+  const pctx = pc.getContext('2d');
+  pctx.clearRect(0, 0, pw, pc.height);
+  drawSign(pctx, pw, f);
+
+  // filename
+  document.getElementById('fn-preview').textContent = getFilename(f);
+
+  // main frame
+  if (cameraActive || photoImage) drawFrame();
+}
+
+// ===========================
+// FRAME DRAWING
+// ===========================
+function applyPos() {
+  if (signOffY >= 0 && signPos === 'custom') return;
+  const mc = document.getElementById('main-canvas');
+  const W = mc.width || 640, H = mc.height || 480;
+  const sH = getSignH(signW, getF());
+  const pad = 16;
+  if (signPos === 'bl') { signOffX = pad; signOffY = H - sH - pad; }
+  else if (signPos === 'br') { signOffX = W - signW - pad; signOffY = H - sH - pad; }
+  else if (signPos === 'tl') { signOffX = pad; signOffY = pad; }
+  else if (signPos === 'tr') { signOffX = W - signW - pad; signOffY = pad; }
+}
+
+function drawFrame() {
+  const mc = document.getElementById('main-canvas');
+  const ctx = mc.getContext('2d');
+  const vf = document.getElementById('viewfinder');
+  const maxW = vf.clientWidth;
+  const f = getF();
+
+  if (cameraActive) {
+    const vid = document.getElementById('cam-video');
+    if (!vid.videoWidth) { requestAnimationFrame(drawFrame); return; }
+    const vw = vid.videoWidth, vh = vid.videoHeight;
+    mc.width = Math.min(maxW * 2, vw); // high-res for capture
+    mc.height = Math.round(mc.width * vh / vw);
+    ctx.drawImage(vid, 0, 0, mc.width, mc.height);
+  } else if (photoImage) {
+    mc.width = Math.min(maxW * 2, photoImage.naturalWidth);
+    mc.height = Math.round(mc.width * photoImage.naturalHeight / photoImage.naturalWidth);
+    ctx.drawImage(photoImage, 0, 0, mc.width, mc.height);
+  }
+
+  if (signOffY < 0) applyPos();
+
+  // draw sign
+  const sH = getSignH(signW, f);
+  const oc2 = document.createElement('canvas');
+  oc2.width = signW; oc2.height = sH;
+  drawSign(oc2.getContext('2d'), signW, f);
+  ctx.drawImage(oc2, signOffX, signOffY);
+
+  // dashed border
+  ctx.strokeStyle = 'rgba(255,255,255,0.75)';
+  ctx.lineWidth = 1.5;
+  ctx.setLineDash([5, 4]);
+  ctx.strokeRect(signOffX, signOffY, signW, sH);
+  ctx.setLineDash([]);
+
+  // resize handle
+  ctx.fillStyle = 'rgba(255,255,255,0.92)';
+  ctx.beginPath();
+  ctx.arc(signOffX + signW - 10, signOffY + sH - 10, 9, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#333';
+  ctx.font = 'bold 11px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('↔', signOffX + signW - 10, signOffY + sH - 10);
+
+  if (cameraActive) requestAnimationFrame(drawFrame);
+}
+
+// ===========================
+// CAMERA
+// ===========================
+async function startCamera() {
+  try {
+    if (stream) stream.getTracks().forEach(t => t.stop());
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1440 } },
+      audio: false
+    });
+    const vid = document.getElementById('cam-video');
+    vid.srcObject = stream;
+    await new Promise(r => vid.onloadedmetadata = r);
+    vid.play();
+    document.getElementById('no-cam-msg').style.display = 'none';
+    document.getElementById('main-canvas').style.display = 'block';
+    document.getElementById('shutter-btn').classList.add('ready');
+    cameraActive = true; photoImage = null; signOffY = -1;
+    requestAnimationFrame(drawFrame);
+    showHint();
+    setStatus('カメラ起動中 — 黒板をドラッグで移動できます');
+  } catch (e) {
+    setStatus('カメラへのアクセスが許可されていません');
+  }
+}
+
+async function toggleCamera() {
+  if (!cameraActive) { await startCamera(); return; }
+  facingMode = facingMode === 'environment' ? 'user' : 'environment';
+  await startCamera();
+}
+
+function loadImage(input) {
+  if (!input.files[0]) return;
+  if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+  cameraActive = false;
+  const img = new Image();
+  img.onload = () => {
+    photoImage = img; signOffY = -1;
+    document.getElementById('no-cam-msg').style.display = 'none';
+    document.getElementById('main-canvas').style.display = 'block';
+    document.getElementById('shutter-btn').classList.add('ready');
+    drawFrame();
+    showHint();
+    setStatus('画像読み込み完了 — 黒板の位置を調整してシャッターを押してください');
+  };
+  img.src = URL.createObjectURL(input.files[0]);
+  input.value = '';
+}
+
+// ===========================
+// CAPTURE
+// ===========================
+function onShutter() {
+  if (!cameraActive && !photoImage) { startCamera(); return; }
+  capturePhoto();
+}
+
+function capturePhoto() {
+  const mc = document.getElementById('main-canvas');
+  if (!mc.width) return;
+  drawFrame();
+  setTimeout(() => {
+    const oc = document.getElementById('off-canvas');
+    oc.width = mc.width; oc.height = mc.height;
+    oc.getContext('2d').drawImage(mc, 0, 0);
+    const f = getF();
+    const fn = getFilename(f);
+    const url = oc.toDataURL('image/jpeg', 0.92);
+    photos.push({ url, filename: fn, f3: f.f3, ts: Date.now() });
+    toast('✓ 保存しました');
+    setStatus('保存済 — 続けて撮影できます');
+  }, 80);
+}
+
+// ===========================
+// GALLERY
+// ===========================
+function renderGallery() {
+  const grid = document.getElementById('photo-grid');
+  const noP = document.getElementById('no-photos');
+  document.getElementById('photo-count').textContent = photos.length;
+  document.getElementById('dl-all-btn').style.display = photos.length ? '' : 'none';
+  document.getElementById('clear-btn').style.display = photos.length ? '' : 'none';
+  grid.innerHTML = '';
+  if (!photos.length) { noP.style.display = 'block'; return; }
+  noP.style.display = 'none';
+  photos.forEach((p, i) => {
+    const d = document.createElement('div');
+    d.className = 'photo-item';
+    const shortName = p.filename.length > 26 ? p.filename.slice(0, 24) + '…' : p.filename;
+    d.innerHTML = `<img src="${p.url}" onclick="dlOne(${i})"><div class="photo-info"><div class="photo-no">${p.f3 || 'No.' + (i + 1)}</div><div class="photo-name">${shortName}</div></div><button class="photo-del" onclick="deletePhoto(${i})">✕</button>`;
+    grid.appendChild(d);
+  });
+}
+
+function dlOne(i) {
+  const p = photos[i];
+  const a = document.createElement('a');
+  a.href = p.url; a.download = p.filename; a.click();
+}
+function deletePhoto(i) { photos.splice(i, 1); renderGallery(); }
+function clearAll() { if (confirm('すべての写真を削除しますか？')) { photos = []; renderGallery(); } }
+function downloadAll() { photos.forEach((p, i) => setTimeout(() => dlOne(i), i * 300)); }
+
+function sortPhotos() {
+  photos.sort((a, b) => {
+    const na = a.f3 || '', nb = b.f3 || '';
+    const ia = parseInt(na), ib = parseInt(nb);
+    if (!isNaN(ia) && !isNaN(ib)) return ia - ib;
+    return na.localeCompare(nb, 'ja');
+  });
+  renderGallery();
+  toast('No.順に並べ替えました');
+}
+
+// ===========================
+// DRAG / RESIZE on canvas
+// ===========================
+const mc = document.getElementById('main-canvas');
+
+function getCanvasPos(e) {
+  const r = mc.getBoundingClientRect();
+  const cx = e.touches ? e.touches[0].clientX : e.clientX;
+  const cy = e.touches ? e.touches[0].clientY : e.clientY;
+  return {
+    x: (cx - r.left) * (mc.width / r.width),
+    y: (cy - r.top) * (mc.height / r.height)
+  };
+}
+function inHandle(p) {
+  const sH = getSignH(signW, getF());
+  return Math.hypot(p.x - (signOffX + signW - 10), p.y - (signOffY + sH - 10)) < 18;
+}
+function inSign(p) {
+  const sH = getSignH(signW, getF());
+  return p.x >= signOffX && p.x <= signOffX + signW && p.y >= signOffY && p.y <= signOffY + sH;
+}
+
+mc.addEventListener('touchstart', e => {
+  const p = getCanvasPos(e);
+  if (inHandle(p)) { resizing = true; rsX = p.x; rsW = signW; }
+  else if (inSign(p)) { dragging = true; dsx = p.x; dsy = p.y; dox = signOffX; doy = signOffY; }
+}, { passive: true });
+
+mc.addEventListener('touchmove', e => {
+  if (!dragging && !resizing) return;
+  e.preventDefault();
+  const p = getCanvasPos(e);
+  if (dragging) {
+    signOffX = dox + (p.x - dsx);
+    signOffY = doy + (p.y - dsy);
+    signPos = 'custom';
+  }
+  if (resizing) {
+    signW = Math.max(120, Math.min(rsW + (p.x - rsX), mc.width - signOffX - 4));
+    document.getElementById('sign-size').value = Math.round(signW);
+    document.getElementById('size-val').textContent = Math.round(signW);
+  }
+  if (!cameraActive) drawFrame();
+}, { passive: false });
+
+mc.addEventListener('touchend', () => { dragging = false; resizing = false; });
+
+mc.addEventListener('mousedown', e => {
+  const p = getCanvasPos(e);
+  if (inHandle(p)) { resizing = true; rsX = p.x; rsW = signW; }
+  else if (inSign(p)) { dragging = true; dsx = p.x; dsy = p.y; dox = signOffX; doy = signOffY; }
+});
+mc.addEventListener('mousemove', e => {
+  if (!dragging && !resizing) return;
+  const p = getCanvasPos(e);
+  if (dragging) { signOffX = dox + (p.x - dsx); signOffY = doy + (p.y - dsy); signPos = 'custom'; }
+  if (resizing) { signW = Math.max(120, rsW + (p.x - rsX)); }
+  if (!cameraActive) drawFrame();
+});
+mc.addEventListener('mouseup', () => { dragging = false; resizing = false; });
+
+// ===========================
+// UI HELPERS
+// ===========================
+function setStatus(msg) { document.getElementById('status-bar').textContent = msg; }
+
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function showHint() {
+  const h = document.getElementById('sign-drag-hint');
+  h.classList.add('show');
+  setTimeout(() => h.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
